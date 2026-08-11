@@ -1,0 +1,112 @@
+version: '3'
+
+vars:
+  GO_VERSION: '1.26.3'
+  GOLANGCI_LINT_VERSION: 'v2.12.2'
+  GCI_VERSION: 'v0.14.0'
+  GOFUMPT_VERSION: 'v0.10.0'
+
+  BIN_DIR: '{{.ROOT_DIR}}/bin'
+  GOLANGCI_LINT: '{{.BIN_DIR}}/golangci-lint'
+  GCI: '{{.BIN_DIR}}/gci'
+  GOFUMPT: '{{.BIN_DIR}}/gofumpt'
+
+  MODULE_NAME: github.com/mrLexx/go-concurrency-lab
+
+tasks:
+  formatters:install:
+    desc: "Устанавливает gofumpt и gci"
+    cmds:
+      - echo '📦 Устанавливаем gofumpt...'
+      - GOBIN={{.BIN_DIR}} go install mvdan.cc/gofumpt@{{.GOFUMPT_VERSION}}
+      - echo '📦 Устанавливаем gci...'
+      - GOBIN={{.BIN_DIR}} go install github.com/daixiang0/gci@{{.GCI_VERSION}}
+    status:
+      - test -x {{.GOFUMPT}}
+      - test -x {{.GCI}}
+
+  golangci-lint:install:
+    desc: "Устанавливает golangci-lint"
+    cmds:
+      - echo '📦 Устанавливаем golangci-lint...'
+      - GOBIN={{.BIN_DIR}} go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
+    status:
+      - test -x {{.GOLANGCI_LINT}}
+
+  install:
+    aliases: [setup]
+    desc: "Устанавливает все инструменты"
+    deps: [formatters:install, golangci-lint:install]
+
+  format:
+    desc: "Форматирует код (gofumpt + gci)"
+    deps: [formatters:install]
+    cmds:
+      - echo '🧹 Форматируем код через gofumpt...'
+      - find . -type f -name '*.go' ! -path '*/mocks/*' ! -path '*/pkg/proto/*' ! -path '*/pkg/openapi/*' -exec {{.GOFUMPT}} -extra -w {} +
+      - echo '📦 Сортируем импорты через gci...'
+      - find . -type f -name '*.go' ! -path '*/mocks/*' ! -path '*/pkg/proto/*' ! -path '*/pkg/openapi/*' -exec {{.GCI}} write -s standard -s default -s "prefix({{.MODULE_NAME}})" {} +
+
+  lint:
+    desc: "Запускает golangci-lint"
+    deps: [golangci-lint:install]
+    cmds:
+      # - '{{.GOLANGCI_LINT}} run --allow-parallel-runners {{range .MODULES}}{{.}}/... {{end}} --config=.golangci.yml'
+      - '{{.GOLANGCI_LINT}} run --config=.golangci.yml'
+
+  deps:update:
+    desc: "Обновляет зависимости"
+    cmds:
+      - echo '🔄 Обновляем зависимости...'
+      - go mod tidy -compat={{.GO_VERSION}}
+
+  test:
+    desc: "Запускает unit-тесты с race-детектором (без API-тестов из order/tests)"
+    cmds:
+      - go test -v -race -count=1 ./...
+
+  fix:diff:
+    desc: "Производит предварительный просмотр автоматических исправлений"
+    cmds:
+      - echo '🔍 Проверяем на возможность исправления...'
+      - go fix -diff ./...
+
+  docs:
+    desc: Обновить список команд в README.md
+    silent: true
+    cmds:
+      - |
+        echo '📄 записываем команды в README.md...'
+        jq -r '
+          .tasks
+          | sort_by(.name)
+          | .[]
+          | select(.desc != null and .desc != "")
+          | "* `task \(.name)` — \(.desc)"
+        ' < <(task --json --list) >/tmp/tasks.md
+
+        awk '
+        BEGIN {skip=0}
+        /<!-- TASKS_START -->/ {
+            print
+            while ((getline line < "/tmp/tasks.md") > 0)
+                print line
+            skip=1
+            next
+        }
+        /<!-- TASKS_END -->/ {
+            skip=0
+            print
+            next
+        }
+        !skip
+        ' README.md > README.md.tmp
+
+        mv README.md.tmp README.md
+  run:
+    desc: "Запускает проект"
+    silent: true
+    cmds:
+      - echo '🚀 запускаем проект...'
+      - go run ./cmd/app/.
+
