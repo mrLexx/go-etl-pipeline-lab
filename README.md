@@ -3,7 +3,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26-blue.svg)](https://go.dev/)
 ![Go Concurrency ](https://img.shields.io/badge/Go-Concurrency-blue.svg)
 
-Учебный проект по реализации ETL Pipelines на Go.
+Учебный проект по реализации ETL Pipeline на Go.
 
 ## Запуск
 
