@@ -9,7 +9,8 @@ package etlpipeline
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -47,9 +48,10 @@ func genWeb(ctx context.Context, every time.Duration) <-chan WebEvent {
 	out := make(chan WebEvent)
 	go func() {
 		defer close(out)
-		t := time.NewTicker(every)
 
+		t := time.NewTicker(every)
 		defer t.Stop()
+
 		i := 0
 		for {
 			select {
@@ -65,9 +67,9 @@ func genWeb(ctx context.Context, every time.Duration) <-chan WebEvent {
 				// Отправку тоже прикрываем ctx, иначе на отмене
 				// горутина зависнет на out <- ev, если читателя уже нет.
 				select {
-				case out <- ev:
 				case <-ctx.Done():
 					return
+				case out <- ev:
 				}
 			}
 		}
@@ -83,6 +85,7 @@ func genApp(ctx context.Context, every time.Duration) <-chan AppEvent {
 
 		t := time.NewTicker(every)
 		defer t.Stop()
+
 		i := 0
 		for {
 			select {
@@ -96,9 +99,9 @@ func genApp(ctx context.Context, every time.Duration) <-chan AppEvent {
 					EventTime: time.Now(),
 				}
 				select {
-				case out <- ev:
 				case <-ctx.Done():
 					return
+				case out <- ev:
 				}
 			}
 		}
@@ -120,9 +123,9 @@ func consume(in <-chan []Event) {
 				app++
 			}
 		}
-		log.Printf("batch #%d: %d событий (web=%d app=%d)", n, len(b), web, app)
+		slog.Info(fmt.Sprintf("batch #%d: %d событий (web=%d app=%d)", n, len(b), web, app))
 	}
-	log.Printf("готово, всего батчей: %d", n)
+	slog.Info(fmt.Sprintf("готово, всего батчей: %d", n))
 }
 
 func normalizeWeb(ctx context.Context, in <-chan WebEvent) <-chan Event {
@@ -142,13 +145,10 @@ func normalizeWeb(ctx context.Context, in <-chan WebEvent) <-chan Event {
 					Source: "web",
 					UserID: v.SessionID,
 					Action: v.URL,
-					// At:     time.UnixMicro(v.TS),
-					At: time.Unix(v.TS, 0),
+					At:     time.Unix(v.TS, 0),
 				}
-				select {
-				case <-ctx.Done():
+				if !sendEvent(ctx, out, e) {
 					return
-				case out <- e:
 				}
 			}
 		}
@@ -177,10 +177,8 @@ func normalizeApp(ctx context.Context, in <-chan AppEvent) <-chan Event {
 					At:     v.EventTime,
 				}
 
-				select {
-				case <-ctx.Done():
+				if !sendEvent(ctx, out, e) {
 					return
-				case out <- e:
 				}
 
 			}
@@ -215,10 +213,10 @@ func merge(ctx context.Context, inputChannels ...<-chan Event) <-chan Event {
 
 	wg.Add(len(inputChannels))
 	for _, ch := range inputChannels {
-		go func() {
+		go func(in <-chan Event) {
 			defer wg.Done()
-			redirect(ctx, ch, out)
-		}()
+			redirect(ctx, in, out)
+		}(ch)
 	}
 
 	go func() {
@@ -229,34 +227,47 @@ func merge(ctx context.Context, inputChannels ...<-chan Event) <-chan Event {
 	return out
 }
 
-func mergePr(ctx context.Context, c1, c2 <-chan Event) <-chan Event {
+func mergePriority(ctx context.Context, ch1, ch2 <-chan Event) <-chan Event {
 	out := make(chan Event)
 
 	go func() {
 		defer close(out)
 
-		select {
+		for ch1 != nil || ch2 != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case v, ok := <-ch1:
+				if !ok {
+					ch1 = nil
+					continue
+				}
+				if !sendEvent(ctx, out, v) {
+					return
+				}
+				continue
+			default:
+			}
 
-		case <-ctx.Done():
-		case <-ctx.Done():
-			return
-		case v, ok := <-c1:
-			if !ok {
-				return
-			}
 			select {
 			case <-ctx.Done():
 				return
-			case out <- v:
-			}
-		case v, ok := <-c2:
-			if !ok {
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case out <- v:
+			case v, ok := <-ch1:
+				if !ok {
+					ch1 = nil
+					continue
+				}
+				if !sendEvent(ctx, out, v) {
+					return
+				}
+			case v, ok := <-ch2:
+				if !ok {
+					ch2 = nil
+					continue
+				}
+				if !sendEvent(ctx, out, v) {
+					return
+				}
 			}
 
 		}
@@ -265,8 +276,54 @@ func mergePr(ctx context.Context, c1, c2 <-chan Event) <-chan Event {
 	return out
 }
 
+func sendEvent(ctx context.Context, out chan<- Event, event Event) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case out <- event:
+		return true
+	}
+}
+
 func batch(in <-chan Event, s int, t time.Duration) <-chan []Event {
-	panic("реализовать")
+	out := make(chan []Event)
+
+	go func() {
+		defer close(out)
+
+		b := make([]Event, 0, s)
+		ticker := time.NewTicker(t)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case e, ok := <-in:
+				if !ok {
+					if len(b) > 0 {
+						out <- b
+					}
+					return
+				}
+
+				b = append(b, e)
+
+				if len(b) == s {
+					out <- b
+					b = make([]Event, 0, s)
+					ticker.Reset(t)
+				}
+
+			case <-ticker.C:
+				if len(b) > 0 {
+					out <- b
+				}
+				return
+
+			}
+		}
+	}()
+
+	return out
 }
 
 func RunPipeline(
@@ -277,5 +334,11 @@ func RunPipeline(
 	bSize int,
 	bTimeout time.Duration,
 ) <-chan []Event {
-	panic("реализовать")
+	mr := merge(
+		ctx,
+		normalizeApp(ctx, app),
+		normalizeWeb(ctx, web),
+	)
+
+	return batch(mr, bSize, bTimeout)
 }
