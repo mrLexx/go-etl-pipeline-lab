@@ -1,9 +1,9 @@
-# Go etl pipeline Lab
+# Go ETL pipeline Lab
 
 [![Go Version](https://img.shields.io/badge/Go-1.26-blue.svg)](https://go.dev/)
 ![Go Concurrency ](https://img.shields.io/badge/Go-Concurrency-blue.svg)
 
-Учебный проект по конкурентному программированию на Go.
+Учебный проект по реализации ETL Pipelines на Go.
 
 ## Запуск
 
