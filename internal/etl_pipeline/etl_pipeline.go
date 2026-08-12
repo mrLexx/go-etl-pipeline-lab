@@ -137,6 +137,7 @@ func normalizeWeb(ctx context.Context, in <-chan WebEvent) <-chan Event {
 		for {
 			select {
 			case <-ctx.Done():
+				return
 			case v, ok := <-in:
 				if !ok {
 					return
@@ -166,6 +167,7 @@ func normalizeApp(ctx context.Context, in <-chan AppEvent) <-chan Event {
 		for {
 			select {
 			case <-ctx.Done():
+				return
 			case v, ok := <-in:
 				if !ok {
 					return
@@ -316,9 +318,9 @@ func batch(in <-chan Event, s int, t time.Duration) <-chan []Event {
 			case <-ticker.C:
 				if len(b) > 0 {
 					out <- b
+					b = make([]Event, 0, s)
 				}
-				return
-
+				ticker.Reset(t)
 			}
 		}
 	}()
