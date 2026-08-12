@@ -11,7 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"time"
@@ -61,7 +61,7 @@ func genWeb(ctx context.Context, every time.Duration) <-chan WebEvent {
 				i++
 				ev := WebEvent{
 					SessionID: "web-" + strconv.Itoa(i),
-					URL:       "/p/" + strconv.Itoa(rand.Intn(5)),
+					URL:       "/p/" + strconv.Itoa(rand.IntN(5)),
 					TS:        time.Now().Unix(),
 				}
 				// Отправку тоже прикрываем ctx, иначе на отмене
@@ -95,7 +95,7 @@ func genApp(ctx context.Context, every time.Duration) <-chan AppEvent {
 				i++
 				ev := AppEvent{
 					DeviceID:  "dev-" + strconv.Itoa(i),
-					Screen:    "screen_" + strconv.Itoa(rand.Intn(5)),
+					Screen:    "screen_" + strconv.Itoa(rand.IntN(5)),
 					EventTime: time.Now(),
 				}
 				select {
