@@ -40,7 +40,7 @@ task --list
 * `task install` — Устанавливает все инструменты
 * `task lint` — Запускает golangci-lint
 * `task run` — Запускает проект
-* `task test` — Запускает unit-тесты с race-детектором (без API-тестов из order/tests)
+* `task test` — Запускает unit-тесты с race-детектором
 * `task test:coverage` — Тесты с покрытием
 <!-- TASKS_END -->
 

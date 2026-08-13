@@ -64,11 +64,6 @@ tasks:
       - echo '🔄 Обновляем зависимости...'
       - go mod tidy -compat={{.GO_VERSION}}
 
-  test:
-    desc: "Запускает unit-тесты с race-детектором (без API-тестов из order/tests)"
-    cmds:
-      - go test -v -race -count=1 ./...
-
   fix:apply:
     desc: "Производит предварительный просмотр автоматических исправлений"
     cmds:
@@ -165,19 +160,29 @@ tasks:
     desc: "Тесты с покрытием"
     deps: [coverage:clean]
     vars:
-      # Пакеты, покрытие которых нас интересует.
-      # Исключаем моки (mockery) и берём только api/service — 
-      # обычно это внутренние слои приложения (internal/api, internal/service).
+      MOD:
+        sh: go list -m
       TARGET_PACKAGES:
-        sh: go list ./... | grep -v "/mocks" | grep -E '/(api|service)/' | tr '\n' ','
+        sh: go list ./... | grep -vE "^{{.MOD}}/(cmd)(/|$)" | tr '\n' ',' | sed 's/,$//'
+      TEST_PACKAGES:
+        sh: go list ./... | grep -vE "^{{.MOD}}/(cmd)(/|$)" | tr '\n' ' ' | sed 's/ $//'
     cmds:
       - echo "📦 Целевые пакеты:{{.TARGET_PACKAGES}}"
       - |
-        MOD=$(go list -m)
         go test -v -race -covermode=atomic \
           -coverprofile={{.COVERAGE_FILE}} \
           -coverpkg={{.TARGET_PACKAGES}} \
-          $(go list ./... | grep -vE "^${MOD}/tests(/|$)")
+          {{.TEST_PACKAGES}}
       - echo "📊 Покрытие по функциям:"
       - go tool cover -func={{.COVERAGE_FILE}}
       - task: coverage:threshold
+
+  test:
+    desc: "Запускает unit-тесты с race-детектором"
+    vars:
+      MOD:
+        sh: go list -m
+      TEST_PACKAGES:
+        sh: go list ./... | grep -vE "^{{.MOD}}/(cmd)(/|$)" | tr '\n' ' ' | sed 's/ $//'
+    cmds:
+      - go test -v -race -count=1 {{.TEST_PACKAGES}}
