@@ -388,7 +388,8 @@ func TestRunPipeline_CancelShutsDownCleanly(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		for range out { // дренируем до закрытия
+		//nolint:revive // дренируем до закрытия
+		for range out {
 		}
 		close(done)
 	}()
