@@ -1,0 +1,104 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go lint&test
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+#  pull_request:
+#    branches: [ "main" ]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/go-task-setup
+
+      - name: Run lint
+        run: task lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/go-task-setup
+
+      - name: Run tests
+        run: task test
+
+  test-coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/go-task-setup
+
+      - name: Run test:coverage
+        run: |
+          task test:coverage
+          
+          # 2. Extract the total line statement coverage number
+          # This extracts just the number (e.g., 84.5) from the total row
+          TOTAL_COVERAGE=$(go tool cover -func=coverage/coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
+          echo "Total coverage is: $TOTAL_COVERAGE%"
+          
+          # 3. Determine the badge color based on percentage
+          if (( $(echo "$TOTAL_COVERAGE < 40.0" | bc -l) )); then
+            COLOR="red"
+          elif (( $(echo "$TOTAL_COVERAGE < 80.0" | bc -l) )); then
+            COLOR="yellow"
+          else
+            COLOR="brightgreen"
+          fi
+          
+          # 4. Save variables to environment for the next step
+          echo "COVERAGE_MSG=${TOTAL_COVERAGE}%" >> $GITHUB_ENV
+          echo "COVERAGE_COLOR=${COLOR}" >> $GITHUB_ENV
+
+      - name: Update gist
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_SECRET }}
+          GIST_ID: ${{ vars.GIST_ID }}
+        run: |
+          echo "GIST_ID=$GIST_ID"
+          echo "GIST_TOKEN length=${#GIST_TOKEN}"
+
+          curl -o /dev/null -s -w "GitHub API HTTP: %{http_code}\n" \
+            -H "Authorization: Bearer $GIST_TOKEN" \
+            https://api.github.com/user        
+
+          jq -n \
+            --arg message "$COVERAGE_MSG" \
+            --arg color "$COVERAGE_COLOR" \
+            '{
+              files: {
+                "go-microservices-course-coverage.json": {
+                  content: ({
+                    schemaVersion: 1,
+                    label: "coverage",
+                    message: $message,
+                    color: $color
+                  } | tojson)
+                }
+              }
+            }' > payload.json
+
+          curl -L \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GIST_TOKEN" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            https://api.github.com/gists/$GIST_ID \
+            -d @payload.json

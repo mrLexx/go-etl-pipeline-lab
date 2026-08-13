@@ -1,0 +1,39 @@
+# .github/actions/go-task-setup/action.yml
+name: Go Task Setup
+description: Checkout, setup Go, install Task, cache setup artifacts
+
+runs:
+  using: composite
+  steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        cache: true
+        cache-dependency-path: |
+          go.sum
+
+    - name: Install Task
+      uses: arduino/setup-task@v2
+      with:
+        version: 3.x
+        repo-token: ${{ github.token }}
+
+    - name: Cache setup
+      id: cache-setup
+      uses: actions/cache@v5
+      with:
+        path: |
+          bin
+          ~/go/bin
+          ~/.cache
+          .task
+        key: ${{ runner.os }}-task-setup-${{ hashFiles('Taskfile.yml', '**/Taskfile.yml', '**/go.sum', 'buf.yaml', 'buf.gen.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-task-setup-
+
+    - name: Setup golangci-lint
+      if: steps.cache-setup.outputs.cache-hit != 'true'
+      shell: bash
+      run: task golangci-lint:install
