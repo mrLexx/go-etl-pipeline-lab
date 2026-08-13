@@ -84,7 +84,7 @@ jobs:
             --arg color "$COVERAGE_COLOR" \
             '{
               files: {
-                "go-microservices-course-coverage.json": {
+                "go-etl-pipeline-lab-coverage.json": {
                   content: ({
                     schemaVersion: 1,
                     label: "coverage",
