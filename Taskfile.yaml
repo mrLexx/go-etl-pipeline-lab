@@ -11,7 +11,11 @@ vars:
   GCI: '{{.BIN_DIR}}/gci'
   GOFUMPT: '{{.BIN_DIR}}/gofumpt'
 
-  MODULE_NAME: github.com/mrLexx/go-concurrency-lab
+  COVERAGE_DIR: '{{.ROOT_DIR}}/coverage'
+  COVERAGE_FILE: '{{.COVERAGE_DIR}}/coverage.out'
+  COVERAGE_THRESHOLD: '40'
+
+  MODULE_NAME: github.com/mrLexx/go-etl-pipeline-lab
 
 tasks:
   formatters:install:
@@ -110,3 +114,64 @@ tasks:
       - echo '🚀 запускаем проект...'
       - go run ./cmd/app/.
 
+  coverage:clean:
+    desc: "Очищает директорию с отчётами покрытия"
+    internal: true
+    cmds:
+      - rm -rf {{.COVERAGE_DIR}}
+      - mkdir -p {{.COVERAGE_DIR}}
+
+  coverage:threshold:
+    desc: "Проверяет соответствие покрытия порогу"
+    internal: true
+    vars:
+      COVERAGE:
+        sh: go tool cover -func={{.COVERAGE_FILE}} | tail -n1 | awk '{print $NF}' | tr -d '%'
+    preconditions:
+      - sh: test -f {{.COVERAGE_FILE}}
+        msg: "Файл покрытия не найден. Запустите task test:coverage"
+    cmds:
+      - echo "🧾 Общее покрытие:{{.COVERAGE}}% | Порог:{{.COVERAGE_THRESHOLD}}%"
+      - cmd: test $(echo "{{.COVERAGE}} >= {{.COVERAGE_THRESHOLD}}" | bc) -eq 1
+      - echo "✅ Покрытие соответствует порогу"
+
+  coverage:html:
+    desc: "Генерирует HTML-отчёт покрытия"
+    deps: [test:coverage]
+    vars:
+      HTML_FILE: '{{.COVERAGE_DIR}}/coverage.html'
+    cmds:
+      - go tool cover -html={{.COVERAGE_FILE}} -o {{.HTML_FILE}}
+      - echo "🌐 Отчёт сохранён в {{.HTML_FILE}}"
+      - cmd: open {{.HTML_FILE}}
+        platforms: [darwin]
+      - cmd: xdg-open {{.HTML_FILE}}
+        platforms: [linux]
+      - cmd: start {{.HTML_FILE}}
+        platforms: [windows]
+
+  coverage:check:
+    desc: "Проверяет покрытие без запуска тестов"
+    cmds:
+      - task: coverage:threshold
+  
+  test:coverage:
+    desc: "Тесты с покрытием"
+    deps: [coverage:clean]
+    vars:
+      # Пакеты, покрытие которых нас интересует.
+      # Исключаем моки (mockery) и берём только api/service — 
+      # обычно это внутренние слои приложения (internal/api, internal/service).
+      TARGET_PACKAGES:
+        sh: go list ./... | grep -v "/mocks" | grep -E '/(api|service)/' | tr '\n' ','
+    cmds:
+      - echo "📦 Целевые пакеты:{{.TARGET_PACKAGES}}"
+      - |
+        MOD=$(go list -m)
+        go test -v -race -covermode=atomic \
+          -coverprofile={{.COVERAGE_FILE}} \
+          -coverpkg={{.TARGET_PACKAGES}} \
+          $(go list ./... | grep -vE "^${MOD}/tests(/|$)")
+      - echo "📊 Покрытие по функциям:"
+      - go tool cover -func={{.COVERAGE_FILE}}
+      - task: coverage:threshold
