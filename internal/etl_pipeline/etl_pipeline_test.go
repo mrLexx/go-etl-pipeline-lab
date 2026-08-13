@@ -82,19 +82,19 @@ func TestMerge_AllEventsArriveAndChannelCloses(t *testing.T) {
 	out := merge(context.Background(), c1, c2, c3)
 
 	go func() {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			c1 <- Event{Source: "a"}
 		}
 		close(c1)
 	}()
 	go func() {
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			c2 <- Event{Source: "b"}
 		}
 		close(c2)
 	}()
 	go func() {
-		for i := 0; i < 7; i++ {
+		for range 7 {
 			c3 <- Event{Source: "c"}
 		}
 		close(c3)
@@ -139,7 +139,7 @@ func collectEvents(t *testing.T, out <-chan Event, count int, deadline time.Dura
 	events := make([]Event, 0, count)
 	timeout := time.After(deadline)
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		select {
 		case event, ok := <-out:
 			if !ok {
@@ -252,7 +252,7 @@ func TestBatch_FlushBySize(t *testing.T) {
 	out := batch(in, 3, time.Hour)
 
 	go func() {
-		for i := 0; i < 7; i++ {
+		for i := range 7 {
 			in <- Event{UserID: strconv.Itoa(i)}
 		}
 		close(in)
@@ -305,7 +305,7 @@ func TestBatch_FlushesRemainderOnClose(t *testing.T) {
 	out := batch(in, 10, time.Hour) // ни размер, ни таймаут не сработают
 
 	go func() {
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			in <- Event{UserID: strconv.Itoa(i)}
 		}
 		close(in)
@@ -327,13 +327,13 @@ func TestRunPipeline_EndToEnd_NoEventLost(t *testing.T) {
 
 	const nWeb, nApp = 6, 4
 	go func() {
-		for i := 0; i < nWeb; i++ {
+		for i := range nWeb {
 			web <- WebEvent{SessionID: "w" + strconv.Itoa(i), TS: 1700000000}
 		}
 		close(web)
 	}()
 	go func() {
-		for i := 0; i < nApp; i++ {
+		for i := range nApp {
 			app <- AppEvent{DeviceID: "d" + strconv.Itoa(i), EventTime: time.Unix(1700000000, 0)}
 		}
 		close(app)
