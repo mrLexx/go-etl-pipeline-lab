@@ -26,8 +26,11 @@ task --list
 **Основные команды для разработки:**
 
 <!-- TASKS_START -->
+* `task coverage:check` — Проверяет покрытие без запуска тестов
+* `task coverage:html` — Генерирует HTML-отчёт покрытия
 * `task deps:update` — Обновляет зависимости
 * `task docs` — Обновить список команд в README.md
+* `task fix:apply` — Производит предварительный просмотр автоматических исправлений
 * `task fix:diff` — Производит предварительный просмотр автоматических исправлений
 * `task format` — Форматирует код (gofumpt + gci)
 * `task formatters:install` — Устанавливает gofumpt и gci
@@ -36,6 +39,7 @@ task --list
 * `task lint` — Запускает golangci-lint
 * `task run` — Запускает проект
 * `task test` — Запускает unit-тесты с race-детектором (без API-тестов из order/tests)
+* `task test:coverage` — Тесты с покрытием
 <!-- TASKS_END -->
 
 ### 3. Порядок запуска
