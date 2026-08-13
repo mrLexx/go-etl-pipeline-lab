@@ -19,12 +19,14 @@ import (
 
 // --- Структуры источников: разная форма, близкий смысл ---
 
+// WebEvent структура источника web событий
 type WebEvent struct {
 	SessionID string
 	URL       string
 	TS        int64 // unix seconds
 }
 
+// AppEvent структура источника app событий
 type AppEvent struct {
 	DeviceID  string
 	Screen    string
@@ -33,6 +35,7 @@ type AppEvent struct {
 
 // --- Общий нормализованный вид ---
 
+// Event нормализированная структура
 type Event struct {
 	Source string // web | app
 
@@ -61,8 +64,9 @@ func genWeb(ctx context.Context, every time.Duration) <-chan WebEvent {
 				i++
 				ev := WebEvent{
 					SessionID: "web-" + strconv.Itoa(i),
-					URL:       "/p/" + strconv.Itoa(rand.IntN(5)),
-					TS:        time.Now().Unix(),
+					//nolint:gosec // для учебного проекта достаточно
+					URL: "/p/" + strconv.Itoa(rand.IntN(5)),
+					TS:  time.Now().Unix(),
 				}
 				// Отправку тоже прикрываем ctx, иначе на отмене
 				// горутина зависнет на out <- ev, если читателя уже нет.
@@ -94,7 +98,8 @@ func genApp(ctx context.Context, every time.Duration) <-chan AppEvent {
 			case <-t.C:
 				i++
 				ev := AppEvent{
-					DeviceID:  "dev-" + strconv.Itoa(i),
+					DeviceID: "dev-" + strconv.Itoa(i),
+					//nolint:gosec // для учебного проекта достаточно
 					Screen:    "screen_" + strconv.Itoa(rand.IntN(5)),
 					EventTime: time.Now(),
 				}
@@ -110,6 +115,7 @@ func genApp(ctx context.Context, every time.Duration) <-chan AppEvent {
 	return out
 }
 
+//nolint:unused // было в шаблоне
 func consume(in <-chan []Event) {
 	n := 0
 	for b := range in {
@@ -229,6 +235,7 @@ func merge(ctx context.Context, inputChannels ...<-chan Event) <-chan Event {
 	return out
 }
 
+//nolint:gocognit // сложность оставлена для наглядности алгоритма
 func mergePriority(ctx context.Context, ch1, ch2 <-chan Event) <-chan Event {
 	out := make(chan Event)
 
@@ -287,6 +294,7 @@ func sendEvent(ctx context.Context, out chan<- Event, event Event) bool {
 	}
 }
 
+//nolint:gocognit // сложность оставлена для наглядности алгоритма
 func batch(in <-chan Event, s int, t time.Duration) <-chan []Event {
 	out := make(chan []Event)
 
@@ -328,6 +336,9 @@ func batch(in <-chan Event, s int, t time.Duration) <-chan []Event {
 	return out
 }
 
+// RunPipeline запускает конвейер обработки событий из web- и app-источников.
+// Нормализует события к общему типу Event, объединяет их в один поток
+// и группирует в батчи заданного размера или по истечении таймаута.
 func RunPipeline(
 	ctx context.Context,
 	web <-chan WebEvent,
@@ -336,11 +347,11 @@ func RunPipeline(
 	bSize int,
 	bTimeout time.Duration,
 ) <-chan []Event {
-	mr := merge(
+	mergedEvents := merge(
 		ctx,
 		normalizeApp(ctx, app),
 		normalizeWeb(ctx, web),
 	)
 
-	return batch(mr, bSize, bTimeout)
+	return batch(mergedEvents, bSize, bTimeout)
 }
