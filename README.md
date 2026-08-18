@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.26-blue.svg)](https://go.dev/)
 ![Go Concurrency ](https://img.shields.io/badge/Go-Concurrency-blue.svg)
-![CI](https://github.com/mrLexx/go-microservices-course/actions/workflows/go.yml/badge.svg)
+![CI](https://github.com/mrLexx/go-etl-pipeline-lab/actions/workflows/go.yml/badge.svg)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/mrLexx/d259eff64b03c387a366fbd4589b0719/raw/67d6aa50f9bbb30277122eda7d509b30a2db72b1/go-etl-pipeline-lab.json)
 
 Учебный проект по реализации ETL Pipeline на Go.
