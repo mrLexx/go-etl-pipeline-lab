@@ -82,11 +82,12 @@ jobs:
             https://api.github.com/user        
 
           jq -n \
+            --arg filename "$GIST_FILENAME" \
             --arg message "$COVERAGE_MSG" \
             --arg color "$COVERAGE_COLOR" \
             '{
               files: {
-                "$GIST_FILENAME": {
+                ($filename): {
                   content: ({
                     schemaVersion: 1,
                     label: "coverage",
