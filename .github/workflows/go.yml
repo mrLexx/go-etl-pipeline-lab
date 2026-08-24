@@ -74,9 +74,6 @@ jobs:
           GIST_ID: ${{ vars.GIST_ID }}
           GIST_FILENAME: ${{ vars.GIST_FILENAME }}
         run: |
-          echo "GIST_ID=$GIST_ID"
-          echo "GIST_TOKEN length=${#GIST_TOKEN}"
-
           curl -o /dev/null -s -w "GitHub API HTTP: %{http_code}\n" \
             -H "Authorization: Bearer $GIST_TOKEN" \
             https://api.github.com/user        

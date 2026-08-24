@@ -29,7 +29,7 @@ runs:
           ~/go/bin
           ~/.cache
           .task
-        key: ${{ runner.os }}-task-setup-${{ hashFiles('Taskfile.yml', '**/Taskfile.yml', '**/go.sum') }}
+        key: ${{ runner.os }}-task-setup-${{ hashFiles('Taskfile.yaml', '**/Taskfile.yaml', '**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-task-setup-
 
