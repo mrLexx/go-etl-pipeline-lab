@@ -69,6 +69,7 @@ jobs:
           echo "COVERAGE_COLOR=${COLOR}" >> $GITHUB_ENV
 
       - name: Update gist
+        if: github.event_name == 'push'
         env:
           GIST_TOKEN: ${{ secrets.GIST_SECRET }}
           GIST_ID: ${{ vars.GIST_ID }}
