@@ -199,5 +199,5 @@ formatters: # Форматтеры кода (проверка стиля)
       sections: # Порядок группировки импортов
         - Standard  # Стандартная библиотека
         - Default   # Сторонние зависимости
-        - Prefix(github.com/mrLexx/go-microservices-course)  # Локальные импорты проекта
+        - Prefix(github.com/mrLexx/go-etl-pipeline-lab)  # Локальные импорты проекта
       no-inline-comments: false  # Разрешить комментарии после импортов (true — запретит)
