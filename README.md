@@ -32,7 +32,7 @@ task --list
 * `task coverage:html` — Генерирует HTML-отчёт покрытия
 * `task deps:update` — Обновляет зависимости
 * `task docs` — Обновить список команд в README.md
-* `task fix:apply` — Производит предварительный просмотр автоматических исправлений
+* `task fix:apply` — Применяет автоматические исправления к коду (go fix)
 * `task fix:diff` — Производит предварительный просмотр автоматических исправлений
 * `task format` — Форматирует код (gofumpt + gci)
 * `task formatters:install` — Устанавливает gofumpt и gci
