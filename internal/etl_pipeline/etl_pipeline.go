@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -235,50 +236,106 @@ func merge(ctx context.Context, inputChannels ...<-chan Event) <-chan Event {
 	return out
 }
 
+// waitForAny ожидаем с блокировкой события из любого канала.
+// Сделано через reflect.SelectCase, так как у нас динамическое количество каналов
+func waitForAny(ctx context.Context, inputChannels ...<-chan Event) (event Event, ok bool) {
+	var cases []reflect.SelectCase
+
+	cases = append(cases, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(ctx.Done()),
+	})
+	idx := []int{-1}
+
+	for i, ch := range inputChannels {
+		if ch == nil {
+			continue
+		}
+
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ch),
+		})
+		idx = append(idx, i)
+	}
+
+	chosen, val, ok := reflect.Select(cases)
+	if chosen == 0 { // сработал ctx.Done()
+		return Event{}, false
+	}
+
+	if !ok { // канал закрыт
+		inputChannels[idx[chosen]] = nil
+		return Event{}, false
+	}
+
+	return val.Interface().(Event), true
+}
+
+func hasActiveChannel(inputChannels ...<-chan Event) bool {
+	for _, channel := range inputChannels {
+		if channel != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
 //nolint:gocognit // сложность оставлена для наглядности алгоритма
-func mergePriority(ctx context.Context, ch1, ch2 <-chan Event) <-chan Event {
+func mergePriority(ctx context.Context, inputChannels ...<-chan Event) <-chan Event {
 	out := make(chan Event)
 
 	go func() {
 		defer close(out)
 
-		for ch1 != nil || ch2 != nil {
-			select {
-			case <-ctx.Done():
-				return
-			case v, ok := <-ch1:
-				if !ok {
-					ch1 = nil
+		for hasActiveChannel(inputChannels...) {
+			// обработка без блокировки (через default) по приоритету, приоритет - по очереди
+			progress := false
+
+			for i, ch := range inputChannels {
+				if ch == nil {
 					continue
 				}
-				if !sendEvent(ctx, out, v) {
+
+				select {
+				case <-ctx.Done():
 					return
+				case v, ok := <-ch:
+					if !ok {
+						inputChannels[i] = nil
+						continue
+					}
+					if !sendEvent(ctx, out, v) {
+						return
+					}
+					progress = true
+				default:
 				}
+
+				if progress {
+					break
+				}
+			}
+
+			if progress {
 				continue
-			default:
 			}
 
-			select {
-			case <-ctx.Done():
+			// если к этому моменту все каналы nil - смысла работать нет
+			if !hasActiveChannel(inputChannels...) {
+				break
+			}
+
+			val, ok := waitForAny(ctx, inputChannels...)
+
+			if !ok {
+				continue
+			}
+
+			if !sendEvent(ctx, out, val) {
 				return
-			case v, ok := <-ch1:
-				if !ok {
-					ch1 = nil
-					continue
-				}
-				if !sendEvent(ctx, out, v) {
-					return
-				}
-			case v, ok := <-ch2:
-				if !ok {
-					ch2 = nil
-					continue
-				}
-				if !sendEvent(ctx, out, v) {
-					return
-				}
 			}
-
 		}
 	}()
 

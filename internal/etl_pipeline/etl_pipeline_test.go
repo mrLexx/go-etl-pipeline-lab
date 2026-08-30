@@ -192,6 +192,99 @@ func TestMergePriority_PrefersCh1WhenBothReady(t *testing.T) {
 	}
 }
 
+func TestMergePriority_PrefersCh1WhenAllPart1Ready(t *testing.T) {
+	ctx := t.Context()
+
+	const (
+		eventsPerC1 = 4
+		eventsPerC2 = 7
+		eventsPerC3 = 11
+	)
+
+	c1 := make(chan Event, eventsPerC1)
+	c2 := make(chan Event, eventsPerC2+eventsPerC3)
+
+	for i := range eventsPerC1 {
+		c1 <- Event{Source: "c1", UserID: strconv.Itoa(i)}
+	}
+	close(c1)
+
+	for i := range eventsPerC2 + eventsPerC3 {
+		c2 <- Event{Source: "c2", UserID: strconv.Itoa(i)}
+	}
+	close(c2)
+
+	out := mergePriority(ctx, c1, c2, c2)
+
+	got := collectEvents(t, out, eventsPerC1+eventsPerC2+eventsPerC3, 3*time.Second)
+
+	for i := range eventsPerC1 {
+		if got[i].Source != "c1" || got[i].UserID != strconv.Itoa(i) {
+			t.Errorf("событие %d: ожидалось {c1 %d}, получено %+v", i, i, got[i])
+		}
+	}
+
+	for i := range eventsPerC2 + eventsPerC3 {
+		idx := eventsPerC1 + i
+		if got[idx].Source != "c2" || got[idx].UserID != strconv.Itoa(i) {
+			t.Errorf("событие %d: ожидалось {c2 %d}, получено %+v", idx, i, got[idx])
+		}
+	}
+}
+
+func TestMergePriority_PrefersCh1WhenAllPart2Ready(t *testing.T) {
+	ctx := t.Context()
+
+	const (
+		eventsPerC1 = 4
+		eventsPerC2 = 7
+		eventsPerC3 = 5
+	)
+
+	c1 := make(chan Event, eventsPerC1)
+	c2 := make(chan Event, eventsPerC2)
+	c3 := make(chan Event, eventsPerC3)
+
+	for i := range eventsPerC1 {
+		c1 <- Event{Source: "c1", UserID: strconv.Itoa(i)}
+	}
+	close(c1)
+
+	for i := range eventsPerC2 {
+		c2 <- Event{Source: "c2", UserID: strconv.Itoa(i)}
+	}
+	close(c2)
+
+	for i := range eventsPerC3 {
+		c3 <- Event{Source: "c3", UserID: strconv.Itoa(i)}
+	}
+	close(c3)
+
+	out := mergePriority(ctx, c1, c2, c3)
+
+	got := collectEvents(t, out, eventsPerC1+eventsPerC2+eventsPerC3, 3*time.Second)
+
+	for i := range eventsPerC1 {
+		if got[i].Source != "c1" || got[i].UserID != strconv.Itoa(i) {
+			t.Errorf("событие %d: ожидалось {c1 %d}, получено %+v", i, i, got[i])
+		}
+	}
+
+	for i := range eventsPerC2 {
+		idx := eventsPerC1 + i
+		if got[idx].Source == "c1" {
+			t.Errorf("событие %s: ожидалось {c2} или {c3}, получено %+v", got[idx].Source, got[idx])
+		}
+	}
+
+	for i := range eventsPerC3 {
+		idx := eventsPerC1 + eventsPerC2 + i
+		if got[idx].Source == "c1" {
+			t.Errorf("событие %s: ожидалось {c2} или {c3}, получено %+v", got[idx].Source, got[idx])
+		}
+	}
+}
+
 func TestMergePriority_FallsBackToCh2WhenCh1Empty(t *testing.T) {
 	ctx := t.Context()
 
@@ -224,15 +317,41 @@ func TestMergePriority_FallsBackToCh2WhenCh1Empty(t *testing.T) {
 	<-done
 }
 
+func TestMergePriority_FallsBackToCh2WhenAllEmpty(t *testing.T) {
+	ctx := t.Context()
+
+	out := mergePriority(ctx)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+	}()
+
+	select {
+	case got, ok := <-out:
+		if ok {
+			t.Errorf("ожидалось ничего, что-то получено %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("таймаут: out до сих пор не закрыт — возможен deadlock")
+	}
+
+	<-done
+}
+
 func TestMergePriority_ClosesOutWhenBothInputsClosed(t *testing.T) {
 	ctx := t.Context()
 
 	c1 := make(chan Event)
 	c2 := make(chan Event)
+	c3 := make(chan Event)
+	c4 := make(chan Event)
 	close(c1)
 	close(c2)
+	close(c3)
+	close(c4)
 
-	out := mergePriority(ctx, c1, c2)
+	out := mergePriority(ctx, c1, c2, c3, c4)
 
 	select {
 	case _, ok := <-out:
